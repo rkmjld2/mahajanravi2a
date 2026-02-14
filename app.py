@@ -120,6 +120,29 @@ try:
     st.success(f"✅ Saved {len(edited_df)} tests to TiDB!")
 except Exception as e:
     st.error(f"Database error: {e}")
+# --3
+@st.cache_resource
+def get_db_connection():
+    db_config = st.secrets["connections"]["databases"]["default"]
+    
+    # TiDB SSL settings (no CA file needed)
+    config = {
+        'host': db_config["host"],
+        'port': int(db_config["port"]),
+        'user': db_config["username"],
+        'password': db_config["password"],
+        'database': db_config["database"],
+        'connect_timeout': 30,
+        # TiDB Cloud SSL (no CA verification needed)
+        'use_unicode': True,
+        'charset': 'utf8mb4',
+        'ssl_disabled': False,  # Enable SSL
+        'ssl_verify_cert': False,  # Skip CA verification (works with TiDB)
+        'ssl_verify_identity': False
+    }
+    
+    conn = mysql.connector.connect(**config)
+    return conn
 
 # ── 3b. VERIFY CONNECTION (optional sidebar test)
 def test_tidb_connection():
@@ -379,3 +402,4 @@ Answer in bullet points, be concise and cautious."""
 
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
+
