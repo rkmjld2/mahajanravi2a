@@ -95,42 +95,32 @@ def get_ssl_ca_content():
 # -- 3  Database Connection
 @st.cache_resource
 def get_db_connection():
-    db_config = st.secrets["connections"]["databases"]["default"]
-    ssl_ca_content = get_ssl_ca_content()  # Fresh read every time
+    """Streamlit native MySQL/TiDB connection"""
+    conn = st.connection("mysql", type="sql", ttl=600)
+    return conn
+
+# In save section, replace mysql.connector code with:
+try:
+    conn = get_db_connection()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Debug: Show what we found
-    if ssl_ca_content:
-        st.sidebar.success(f"✅ SSL CA loaded: {len(ssl_ca_content)} chars")
-    else:
-        st.sidebar.warning("⚠️ No SSL CA - will try without verification")
-    
-    ssl_args = {}
-    if ssl_ca_content:
-        ssl_args = {
-            "ssl_ca": ssl_ca_content,
-            "ssl_verify_cert": True,
-            "ssl_verify_identity": True
-        }
-    else:
-        ssl_args = {
-            "ssl_disabled": False,  # Still use SSL, just skip CA check
-            "use_unicode": True
-        }
-    
-    try:
-        conn = mysql.connector.connect(
-            host=db_config["host"],
-            port=int(db_config["port"]),
-            user=db_config["username"],
-            password=db_config["password"],
-            database=db_config["database"],
-            connect_timeout=30,
-            **ssl_args
-        )
-        return conn
-    except Exception as e:
-        st.error(f"❌ Connection failed: {str(e)}")
-        raise
+    for _, row in edited_df.iterrows():
+        conn.query("""
+            INSERT INTO blood_reports 
+            (timestamp, test_name, result, unit, ref_range, flag) 
+            VALUES (:timestamp, :test, :result, :unit, :ref_range, :flag)
+        """, params={
+            "timestamp": timestamp,
+            "test": row.get("Test", ""),
+            "result": float(row.get("Result", 0)),
+            "unit": row.get("Unit", ""),
+            "ref_range": row.get("Reference Range", ""),
+            "flag": row.get("Flag", "")
+        })
+    st.success(f"✅ Saved {len(edited_df)} tests to TiDB!")
+except Exception as e:
+    st.error(f"Database error: {e}")
+
 # ── 3b. VERIFY CONNECTION (optional sidebar test)
 def test_tidb_connection():
     try:
@@ -386,5 +376,6 @@ Answer in bullet points, be concise and cautious."""
                 st.markdown(rec_answer)
             except Exception as e:
                 st.error(f"Error generating recommendations: {str(e)}")
+
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
