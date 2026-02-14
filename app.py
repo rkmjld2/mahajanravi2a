@@ -91,7 +91,7 @@ def get_ssl_ca_content():
         return result
     else:
         st.error("❌ TIDB_SSL_CA invalid - missing certificate header")
-# --3
+# --3 database connection 
 @st.cache_resource
 def get_db_connection():
     db_config = st.secrets["connections"]["databases"]["default"]
@@ -373,5 +373,6 @@ Answer in bullet points, be concise and cautious."""
 
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
+
 
 
