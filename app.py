@@ -94,26 +94,32 @@ def get_ssl_ca_content():
 # --3 database connection 
 @st.cache_resource
 def get_db_connection():
+    """TiDB Cloud connection - mysql.connector (NO st.connection needed)"""
     db_config = st.secrets["connections"]["databases"]["default"]
     
-    # TiDB SSL settings (no CA file needed)
     config = {
         'host': db_config["host"],
         'port': int(db_config["port"]),
-        'user': db_config["username"],
+        'user': db_config["username"], 
         'password': db_config["password"],
         'database': db_config["database"],
         'connect_timeout': 30,
-        # TiDB Cloud SSL (no CA verification needed)
         'use_unicode': True,
         'charset': 'utf8mb4',
-        'ssl_disabled': False,  # Enable SSL
-        'ssl_verify_cert': False,  # Skip CA verification (works with TiDB)
+        # TiDB SSL (no CA cert needed)
+        'ssl_disabled': False,
+        'ssl_verify_cert': False,
         'ssl_verify_identity': False
     }
     
-    conn = mysql.connector.connect(**config)
-    return conn
+    try:
+        conn = mysql.connector.connect(**config)
+        st.sidebar.success("✅ TiDB Connected!")
+        return conn
+    except Exception as e:
+        st.sidebar.error(f"❌ TiDB Error: {str(e)}")
+        raise
+
 
 # ── 3b. VERIFY CONNECTION (optional sidebar test)
 def test_tidb_connection():
@@ -373,6 +379,7 @@ Answer in bullet points, be concise and cautious."""
 
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
+
 
 
 
