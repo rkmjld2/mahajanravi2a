@@ -91,35 +91,6 @@ def get_ssl_ca_content():
         return result
     else:
         st.error("❌ TIDB_SSL_CA invalid - missing certificate header")
-        return None
-# -- 3  Database Connection
-@st.cache_resource
-def get_db_connection():
-    """Streamlit native MySQL/TiDB connection"""
-    conn = st.connection("mysql", type="sql", ttl=600)
-    return conn
-
-# In save section, replace mysql.connector code with:
-try:
-    conn = get_db_connection()
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    
-    for _, row in edited_df.iterrows():
-        conn.query("""
-            INSERT INTO blood_reports 
-            (timestamp, test_name, result, unit, ref_range, flag) 
-            VALUES (:timestamp, :test, :result, :unit, :ref_range, :flag)
-        """, params={
-            "timestamp": timestamp,
-            "test": row.get("Test", ""),
-            "result": float(row.get("Result", 0)),
-            "unit": row.get("Unit", ""),
-            "ref_range": row.get("Reference Range", ""),
-            "flag": row.get("Flag", "")
-        })
-    st.success(f"✅ Saved {len(edited_df)} tests to TiDB!")
-except Exception as e:
-    st.error(f"Database error: {e}")
 # --3
 @st.cache_resource
 def get_db_connection():
@@ -402,4 +373,5 @@ Answer in bullet points, be concise and cautious."""
 
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
+
 
