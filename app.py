@@ -92,32 +92,45 @@ def get_ssl_ca_content():
     else:
         st.error("❌ TIDB_SSL_CA invalid - missing certificate header")
 # --3 database connection 
+# DELETE your current get_db_connection() function and replace with this:
+
 @st.cache_resource
 def get_db_connection():
-    """TiDB Cloud connection - mysql.connector (NO st.connection needed)"""
-    db_config = st.secrets["connections"]["databases"]["default"]
-    
-    config = {
-        'host': db_config["host"],
-        'port': int(db_config["port"]),
-        'user': db_config["username"], 
-        'password': db_config["password"],
-        'database': db_config["database"],
-        'connect_timeout': 30,
-        'use_unicode': True,
-        'charset': 'utf8mb4',
-        # TiDB SSL (no CA cert needed)
-        'ssl_disabled': False,
-        'ssl_verify_cert': False,
-        'ssl_verify_identity': False
-    }
-    
+    """TiDB connection - fresh every time for Process button"""
     try:
+        db_config = st.secrets["connections"]["databases"]["default"]
+        
+        # Create NEW connection each time (no cache issues)
+        config = {
+            'host': db_config["host"],
+            'port': int(db_config["port"]),
+            'user': db_config["username"],
+            'password': db_config["password"],
+            'database': db_config["database"],
+            'connect_timeout': 30,
+            'use_unicode': True,
+            'charset': 'utf8mb4',
+            # TiDB SSL - no CA needed
+            'ssl_disabled': False,
+            'ssl_verify_cert': False,
+            'ssl_verify_identity': False,
+            'allow_local_infile': True
+        }
+        
         conn = mysql.connector.connect(**config)
-        st.sidebar.success("✅ TiDB Connected!")
+        
+        # Test the connection immediately
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        cursor.close()
+        
+        st.sidebar.success("✅ TiDB Ready for Process!")
         return conn
+        
     except Exception as e:
-        st.sidebar.error(f"❌ TiDB Error: {str(e)}")
+        st.sidebar.error(f"❌ Connection failed: {str(e)}")
+        st.error(f"Database setup failed: {str(e)}")
         raise
 
 
@@ -237,32 +250,36 @@ Answer (include units/flags):""")
                 st.session_state.rag_chain = create_retrieval_chain(retriever, qa_chain)
 
             # Save to YOUR TiDB database (matches medical1_app.sql)
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                
-                inserted_count = 0
-                for _, row in edited_df.iterrows():
-                    cursor.execute("""
-                        INSERT INTO blood_reports 
-                        (timestamp, test_name, result, unit, ref_range, flag) 
-                        VALUES (%s, %s, %s, %s, %s, %s)
-                    """, (
-                        timestamp, 
-                        row.get("Test", ""), 
-                        float(row.get("Result", 0)),
-                        row.get("Unit", ""), 
-                        row.get("Reference Range", ""),
-                        row.get("Flag", "")
-                    ))
-                    inserted_count += 1
-                conn.commit()
-                conn.close()
-                st.success(f"✅ AI ready! 💾 Saved {inserted_count} tests to TiDB!")
-            except Exception as e:
-                st.error(f"❌ Database error: {str(e)}")
-
+        conn = None
+        try:
+            conn = get_db_connection()  # Fresh connection
+            cursor = conn.cursor()
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            inserted_count = 0
+            for _, row in edited_df.iterrows():
+                cursor.execute("""
+                    INSERT INTO blood_reports 
+                    (timestamp, test_name, result, unit, ref_range, flag) 
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """, (
+                    timestamp, 
+                    row.get("Test", ""), 
+                    float(row.get("Result", 0) if pd.notna(row.get("Result")) else 0),
+                    row.get("Unit", ""), 
+                    str(row.get("Reference Range", "")),
+                    row.get("Flag", "")
+                ))
+                inserted_count += 1
+            
+            conn.commit()
+            st.success(f"✅ AI ready! 💾 Saved {inserted_count} tests to TiDB!")
+            
+        except Exception as e:
+            st.error(f"❌ Database error: {str(e)}")
+        finally:
+            if conn:
+                conn.close()            
     # Chat interface
     if st.session_state.rag_chain:
         st.markdown("---")
@@ -379,6 +396,7 @@ Answer in bullet points, be concise and cautious."""
 
 
     st.caption("These are general ideas only. Always see a doctor for real advice.")
+
 
 
 
